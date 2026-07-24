@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>未来残高</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#15171a;--muted:#6b7280;--line:#e5e7eb;--good:#087f5b;--bad:#c92a2a;--accent:#2563eb}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic",sans-serif}
+.wrap{max-width:780px;margin:0 auto;padding:16px 14px 88px}.top{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 14px}.top h1{font-size:24px;margin:0}.pill{font-size:12px;background:#eef2ff;padding:6px 9px;border-radius:999px;color:#3949ab}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.k{font-size:12px;color:var(--muted);margin-bottom:6px}.v{font-weight:750;font-size:25px;letter-spacing:-.4px}.v.small{font-size:20px}.good{color:var(--good)}.bad{color:var(--bad)}
+.section{margin-top:14px}.section h2{font-size:16px;margin:0 0 8px 2px}.row{display:flex;align-items:center;gap:8px;margin:8px 0}.row label{flex:1;font-size:14px}.row input,.row select,.row textarea{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;font:inherit;min-width:0}.row input[type=number]{width:135px;text-align:right}.row input[type=date]{width:155px}.btn{border:0;border-radius:11px;padding:10px 12px;font-weight:700;background:#111827;color:white;cursor:pointer}.btn.secondary{background:#eef2f7;color:#111827}.btn.danger{background:#fee2e2;color:#991b1b}.btn.full{width:100%}.muted{color:var(--muted);font-size:12px;line-height:1.5}.table{width:100%;border-collapse:collapse;font-size:13px}.table th,.table td{padding:9px 5px;border-bottom:1px solid var(--line);text-align:right}.table th:first-child,.table td:first-child{text-align:left}.tabs{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);display:flex;justify-content:center;z-index:5}.tabs>div{max-width:780px;width:100%;display:grid;grid-template-columns:repeat(3,1fr)}.tab{padding:12px 6px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer}.tab.active{color:#111827;font-weight:800}.page{display:none}.page.active{display:block}.list{display:flex;flex-direction:column;gap:8px}.item{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff}.item .name{font-weight:700;font-size:14px}.item .sub{font-size:11px;color:var(--muted);margin-top:2px}.amount{font-variant-numeric:tabular-nums;font-weight:700}.pos{color:var(--good)}.neg{color:var(--bad)}
+.notice{background:#fff7ed;border:1px solid #fed7aa;padding:11px;border-radius:12px;font-size:13px;line-height:1.5}.hero{padding:18px}.hero .v{font-size:34px}.split{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mini{padding:10px;border-radius:12px;background:#f8fafc}.mini .k{margin:0}.mini .n{font-weight:750;margin-top:4px}.hr{height:1px;background:var(--line);margin:12px 0}.switch{display:flex;gap:6px;flex-wrap:wrap}.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 10px;font-size:12px;cursor:pointer}.chip.on{background:#111827;color:#fff}.footer-note{font-size:11px;color:var(--muted);text-align:center;margin-top:14px}
+@media(max-width:420px){.v{font-size:21px}.hero .v{font-size:30px}.row{align-items:flex-start;flex-wrap:wrap}.row label{flex-basis:100%}.row input[type=number],.row input[type=date],.row select{width:100%}.item{grid-template-columns:1fr auto}.item button{grid-column:2}.grid{gap:8px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>未来残高</h1><span class="pill">端末内に保存</span></div>
+
+  <section id="p-dashboard" class="page active">
+    <div class="card hero">
+      <div class="k">基準残高</div>
+      <div class="v" id="nowBalance">—</div>
+      <div class="muted" id="baseDateLabel"></div>
+      <div class="hr"></div>
+      <div class="split">
+        <div class="mini"><div class="k">今月末</div><div class="n" id="monthEnd">—</div></div>
+        <div class="mini"><div class="k">10月1日</div><div class="n" id="oct1">—</div></div>
+        <div class="mini"><div class="k">6か月後</div><div class="n" id="sixMonths">—</div></div>
+        <div class="mini"><div class="k">今日からの生活費枠</div><div class="n" id="dailyBudget">—</div></div>
+      </div>
+    </div>
+
+    <div class="section"><h2>月末の見込み</h2><div class="card"><table class="table"><thead><tr><th>月</th><th>入金</th><th>支出</th><th>月末残高</th></tr></thead><tbody id="forecastBody"></tbody></table></div></div>
+    <div class="section"><div class="notice">最初に「設定」で、今の銀行残高だけ最新にしてね。カードや家賃は下の予定に入っていれば、未来残高へ自動で反映する。</div></div>
+  </section>
+
+  <section id="p-plans" class="page">
+    <div class="section"><h2>一回だけの予定</h2><div class="list" id="oneOffList"></div><button class="btn full" style="margin-top:10px" onclick="addOneOffPrompt()">＋ 予定を追加</button></div>
+    <div class="section"><h2>毎月の予定</h2><div class="list" id="recurringList"></div></div>
+    <div class="section"><h2>Gmailから候補</h2><div class="card"><div class="muted">Google Apps Scriptとして開いた場合だけ使える。請求・給与っぽいメールを候補として拾い、確認してから予定へ追加する。</div><button class="btn full" style="margin-top:8px" onclick="scanGmail()">Gmailをスキャン</button><div id="gmailStatus" class="muted" style="margin-top:8px"></div><div id="gmailCandidates" class="list" style="margin-top:8px"></div></div></div>
+    <div class="section"><h2>メール本文から候補</h2><div class="card"><div class="muted">請求メールの本文を貼ると、金額と日付をざっくり拾う。</div><textarea id="mailText" style="width:100%;height:120px;margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="例：8月27日のお支払い金額は 113,948円です"></textarea><button class="btn full" style="margin-top:8px" onclick="parseMailText()">候補を作る</button></div></div>
+  </section>
+
+  <section id="p-settings" class="page">
+    <div class="section"><h2>基準</h2><div class="card">
+      <div class="row"><label>基準日</label><input id="baseDate" type="date"></div>
+      <div class="row"><label>いまの銀行残高</label><input id="baseBalance" type="number" step="1"></div>
+    </div></div>
+    <div class="section"><h2>生活費</h2><div class="card">
+      <div class="row"><label>食費・飲み物 / 1日</label><input id="foodDaily" type="number" step="100"></div>
+      <div class="row"><label>電気・水道・ガス / 月</label><input id="utilities" type="number" step="1000"></div>
+    </div></div>
+    <div class="section"><h2>固定</h2><div class="card">
+      <div class="row"><label>給料 / 月</label><input id="salary" type="number" step="1000"></div>
+      <div class="row"><label>給料日</label><input id="salaryDay" type="number" min="1" max="31"></div>
+      <div class="row"><label>家賃</label><input id="rent" type="number"></div>
+      <div class="row"><label>奨学金</label><input id="student" type="number"></div>
+      <div class="row"><label>Paidy</label><input id="paidy" type="number"></div>
+      <div class="row"><label>半年続く請求 / 月</label><input id="tempCharge" type="number"></div>
+      <div class="row"><label>開始月</label><input id="tempStart" type="month"></div>
+      <div class="row"><label>回数</label><input id="tempCount" type="number" min="0" max="24"></div>
+    </div></div>
+    <div class="section"><h2>更新・ボーナス</h2><div class="card">
+      <div class="row"><label>更新料（仮）</label><input id="renewalFee" type="number"></div>
+      <div class="row"><label>更新日</label><input id="renewalDate" type="date"></div>
+      <div class="row"><label>12月ボーナス</label><input id="bonus" type="number"></div>
+      <div class="row"><label>ボーナス日（仮でOK）</label><input id="bonusDate" type="date"></div>
+    </div></div>
+    <button class="btn full" onclick="saveSettings()">保存して再計算</button>
+    <div class="switch" style="margin-top:10px"><button class="chip" onclick="exportData()">バックアップを書き出す</button><label class="chip">バックアップを読み込む<input id="importFile" type="file" accept="application/json" style="display:none" onchange="importData(event)"></label><button class="chip" onclick="resetAll()">初期化</button></div>
+    <div class="footer-note">銀行やカードのログイン情報は保存しない仕様。</div>
+  </section>
+</div>
+<div class="tabs"><div>
+  <div class="tab active" data-page="dashboard">未来</div>
+  <div class="tab" data-page="plans">予定</div>
+  <div class="tab" data-page="settings">設定</div>
+</div></div>
+<script>
+const yen = n => (Number.isFinite(n)? Math.round(n).toLocaleString('ja-JP')+'円':'—');
+const iso = d => d.toISOString().slice(0,10);
+const todayISO = () => iso(new Date());
+const DEFAULT = {
+  settings:{baseDate:'2026-07-24',baseBalance:197562,foodDaily:1000,utilities:20000,salary:260000,salaryDay:25,rent:69440,student:8118,paidy:3639,tempCharge:31500,tempStart:'2026-09',tempCount:6,renewalFee:69440,renewalDate:'2026-10-15',bonus:450000,bonusDate:'2026-12-25'},
+  oneOffs:[
+    {id:'income-jul',name:'明日の入金',date:'2026-07-25',amount:290000},
+    {id:'smbc-jul',name:'三井住友VISA 7月',date:'2026-07-27',amount:-208165},
+    {id:'amazon-jul',name:'Amazon 7月',date:'2026-07-27',amount:-37806},
+    {id:'paypay-jul',name:'PayPay 7月',date:'2026-07-27',amount:-70000},
+    {id:'smbc-aug',name:'三井住友VISA 8月',date:'2026-08-27',amount:-113948},
+    {id:'amazon-aug',name:'Amazon 8月（調整後）',date:'2026-08-27',amount:-60000},
+    {id:'paypay-aug',name:'PayPay 8月',date:'2026-08-27',amount:-22000}
+  ]
+};
+let state = load();
+function load(){try{return JSON.parse(localStorage.getItem('mirai-zandaka-v1'))||structuredClone(DEFAULT)}catch(e){return structuredClone(DEFAULT)}}
+function persist(){localStorage.setItem('mirai-zandaka-v1',JSON.stringify(state))}
+function parseDate(s){let [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d,12)}
+function endOfMonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0,12)}
+function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,d.getDate(),12)}
+function daysBetweenInclusive(a,b){const ms=86400000;return Math.max(0,Math.floor((b-a)/ms)+1)}
+function inRange(date,a,b){return date>=a && date<=b}
+function recurringEvents(a,b){
+  const s=state.settings, ev=[];
+  let cursor=new Date(a.getFullYear(),a.getMonth(),1,12), last=new Date(b.getFullYear(),b.getMonth(),1,12);
+  let tempStart=s.tempStart?parseDate(s.tempStart+'-01'):null;
+  while(cursor<=last){
+    const y=cursor.getFullYear(),m=cursor.getMonth();
+    const mk=(day)=>new Date(y,m,Math.min(day,new Date(y,m+1,0).getDate()),12);
+    const sal=mk(Math.max(1,Math.min(31,Number(s.salaryDay)||25))); if(inRange(sal,a,b)) ev.push({name:'給料',date:sal,amount:+s.salary});
+    const pay=mk(27);
+    [['家賃',-s.rent],['奨学金',-s.student],['Paidy',-s.paidy],['光熱水費（見積）',-s.utilities]].forEach(([name,amount])=>{if(amount && inRange(pay,a,b))ev.push({name,date:pay,amount:+amount})});
+    if(tempStart && +s.tempCount>0){const diff=(y-tempStart.getFullYear())*12+(m-tempStart.getMonth());if(diff>=0&&diff<+s.tempCount&&inRange(pay,a,b))ev.push({name:'期間限定請求',date:pay,amount:-Math.abs(+s.tempCharge)})}
+    cursor=new Date(y,m+1,1,12);
+  }
+  return ev;
+}
+function allEvents(a,b){
+  const ev=recurringEvents(a,b);
+  for(const x of state.oneOffs){const d=parseDate(x.date);if(inRange(d,a,b))ev.push({...x,date:d,amount:+x.amount})}
+  const s=state.settings;
+  if(s.renewalDate){const d=parseDate(s.renewalDate);if(inRange(d,a,b)&&+s.renewalFee)ev.push({name:'更新料',date:d,amount:-Math.abs(+s.renewalFee)})}
+  if(s.bonusDate){const d=parseDate(s.bonusDate);if(inRange(d,a,b)&&+s.bonus)ev.push({name:'ボーナス',date:d,amount:+s.bonus})}
+  return ev.sort((x,y)=>x.date-y.date);
+}
+function project(toDate){
+  const s=state.settings, a=parseDate(s.baseDate), b=toDate;
+  if(b<a) return +s.baseBalance;
+  let bal=+s.baseBalance;
+  for(const e of allEvents(a,b)) bal+=+e.amount;
+  bal-=daysBetweenInclusive(a,b)*Math.max(0,+s.foodDaily||0);
+  return bal;
+}
+function monthStats(start,end){let inc=0,out=daysBetweenInclusive(start,end)*(+state.settings.foodDaily||0);for(const e of allEvents(start,end)){if(e.amount>=0)inc+=e.amount;else out+=-e.amount}return{inc,out}}
+function render(){
+  const s=state.settings, base=parseDate(s.baseDate), now=new Date(), baseBal=+s.baseBalance;
+  document.getElementById('nowBalance').textContent=yen(baseBal); document.getElementById('baseDateLabel').textContent=`${s.baseDate} 時点を基準に計算`;
+  const me=endOfMonth(base); const oct1=new Date(2026,9,1,12); const six=addMonths(base,6);
+  setVal('monthEnd',project(me)); setVal('oct1',project(oct1)); setVal('sixMonths',project(six)); document.getElementById('dailyBudget').textContent=yen(+s.foodDaily)+'/日';
+  const tbody=document.getElementById('forecastBody');tbody.innerHTML='';
+  for(let i=0;i<7;i++){const ms=new Date(base.getFullYear(),base.getMonth()+i,1,12), start=i===0?base:ms, end=endOfMonth(ms);const st=monthStats(start,end), bal=project(end);const tr=document.createElement('tr');tr.innerHTML=`<td>${ms.getFullYear()}/${String(ms.getMonth()+1).padStart(2,'0')}</td><td class="pos">+${yen(st.inc)}</td><td class="neg">-${yen(st.out)}</td><td class="${bal<0?'bad':''}">${yen(bal)}</td>`;tbody.appendChild(tr)}
+  renderPlans(); fillSettings(); persist();
+}
+function setVal(id,n){const el=document.getElementById(id);el.textContent=yen(n);el.className='n '+(n<0?'bad':n>0?'good':'')}
+function renderPlans(){
+  const one=document.getElementById('oneOffList');one.innerHTML='';state.oneOffs.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>one.appendChild(itemNode(x,false)));
+  const rec=document.getElementById('recurringList');rec.innerHTML='';const s=state.settings;[
+    ['給料',s.salary,'毎月 '+s.salaryDay+'日'],['家賃',-s.rent,'毎月'],['奨学金',-s.student,'毎月'],['Paidy',-s.paidy,'毎月'],['光熱水費（見積）',-s.utilities,'毎月'],['期間限定請求',-s.tempCharge,`${s.tempStart} から ${s.tempCount}回`],['食費・飲み物',-s.foodDaily,'1日あたり']
+  ].forEach(([name,amount,sub])=>{const div=document.createElement('div');div.className='item';div.innerHTML=`<div><div class="name">${name}</div><div class="sub">${sub}</div></div><div class="amount ${amount>=0?'pos':'neg'}">${amount>=0?'+':'-'}${yen(Math.abs(amount))}</div>`;rec.appendChild(div)})
+}
+function itemNode(x){const div=document.createElement('div');div.className='item';div.innerHTML=`<div><div class="name">${esc(x.name)}</div><div class="sub">${x.date}</div></div><div class="amount ${x.amount>=0?'pos':'neg'}">${x.amount>=0?'+':'-'}${yen(Math.abs(x.amount))}</div><button class="btn danger" onclick="removeOneOff('${x.id}')">削除</button>`;return div}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fillSettings(){for(const k of Object.keys(state.settings)){const el=document.getElementById(k);if(el)el.value=state.settings[k]}}
+function saveSettings(){for(const k of Object.keys(state.settings)){const el=document.getElementById(k);if(!el)continue;state.settings[k]=(el.type==='number')?Number(el.value||0):el.value}persist();render();showPage('dashboard')}
+function addOneOffPrompt(pref={}){const name=prompt('名前',pref.name||'請求');if(!name)return;const date=prompt('日付（YYYY-MM-DD）',pref.date||todayISO());if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){alert('日付の形式が違うよ');return}const amt=Number(prompt('金額。支出はマイナス、入金はプラス',pref.amount??'-1000'));if(!Number.isFinite(amt)){alert('金額が読めなかった');return}state.oneOffs.push({id:'x'+Date.now(),name,date,amount:amt});persist();render()}
+function removeOneOff(id){state.oneOffs=state.oneOffs.filter(x=>x.id!==id);persist();render()}
+function parseMailText(){const t=document.getElementById('mailText').value;const am=[...t.matchAll(/([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\s*円/g)].map(m=>Number(m[1].replaceAll(',','')));if(!am.length){alert('「○○円」が見つからなかった');return}const dm=t.match(/(?:(\d{4})年)?\s*(\d{1,2})月\s*(\d{1,2})日/);let d=todayISO();if(dm){const y=dm[1]?Number(dm[1]):new Date().getFullYear();d=`${y}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`}const income=/給与|賞与|振込|入金/.test(t)&&!/請求|支払|引.?落/.test(t);addOneOffPrompt({name:income?'メールから入金':'メールから請求',date:d,amount:(income?1:-1)*Math.max(...am)})}
+
+function scanGmail(){
+  const st=document.getElementById('gmailStatus'), box=document.getElementById('gmailCandidates');box.innerHTML='';
+  if(!(window.google&&google.script&&google.script.run)){st.textContent='この機能はGoogle Apps Script版で開いたときだけ使えるよ。';return}
+  st.textContent='Gmailを確認中…';
+  google.script.run.withSuccessHandler(rows=>{
+    st.textContent=rows.length?`${rows.length}件の候補が見つかった。必要なものだけ追加してね。`:'候補は見つからなかった。';
+    rows.forEach((x,i)=>{const div=document.createElement('div');div.className='item';div.innerHTML=`<div><div class="name">${esc(x.name)}：${esc(x.subject||'')}</div><div class="sub">${esc(x.date)} / ${esc(x.from||'')}</div></div><div class="amount ${x.amount>=0?'pos':'neg'}">${x.amount>=0?'+':'-'}${yen(Math.abs(x.amount))}</div><button class="btn secondary">追加</button>`;div.querySelector('button').onclick=()=>{state.oneOffs.push({id:'g'+Date.now()+i,name:x.name,date:x.date,amount:Number(x.amount)});persist();render();div.remove()};box.appendChild(div)});
+  }).withFailureHandler(err=>{st.textContent='Gmailの読み取りに失敗：'+(err&&err.message?err.message:err)}).scanBillingEmails(90);
+}
+
+function exportData(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mirai-zandaka-backup.json';a.click();URL.revokeObjectURL(a.href)}
+function importData(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{state=JSON.parse(r.result);persist();render();alert('読み込んだ')}catch(e){alert('読み込みに失敗した')}};r.readAsText(f)}
+function resetAll(){if(confirm('初期データに戻す？')){state=structuredClone(DEFAULT);persist();render()}}
+function showPage(name){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('p-'+name).classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.page===name))}
+document.querySelectorAll('.tab').forEach(x=>x.addEventListener('click',()=>showPage(x.dataset.page)));
+render();
+</script>
+</body>
+</html>
