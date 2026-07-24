@@ -34,13 +34,13 @@
     </div>
 
     <div class="section"><h2>月末の見込み</h2><div class="card"><table class="table"><thead><tr><th>月</th><th>入金</th><th>支出</th><th>月末残高</th></tr></thead><tbody id="forecastBody"></tbody></table></div></div>
-    <div class="section"><div class="notice">最初に「設定」で、今の銀行残高だけ最新にしてね。カードや家賃は下の予定に入っていれば、未来残高へ自動で反映する。</div></div>
+    <div class="section"><div class="notice">「設定」の残高と固定費、「予定」のカード請求をもとに未来残高を計算する。入力内容はこの端末のブラウザ内だけに保存。</div></div>
   </section>
 
   <section id="p-plans" class="page">
     <div class="section"><h2>一回だけの予定</h2><div class="list" id="oneOffList"></div><button class="btn full" style="margin-top:10px" onclick="addOneOffPrompt()">＋ 予定を追加</button></div>
     <div class="section"><h2>毎月の予定</h2><div class="list" id="recurringList"></div></div>
-    <div class="section"><h2>Gmailから候補</h2><div class="card"><div class="muted">Google Apps Scriptとして開いた場合だけ使える。請求・給与っぽいメールを候補として拾い、確認してから予定へ追加する。</div><button class="btn full" style="margin-top:8px" onclick="scanGmail()">Gmailをスキャン</button><div id="gmailStatus" class="muted" style="margin-top:8px"></div><div id="gmailCandidates" class="list" style="margin-top:8px"></div></div></div>
+    <div class="section"><h2>iPhoneメール自動取込</h2><div class="card"><div class="muted">ショートカットからメール本文を受け取ると、請求額と支払日を端末内で解析して自動追加する。メール本文や金額はURLのフラグメントで渡すためGitHub Pagesには送信されない。</div><div id="autoImportStatus" class="muted" style="margin-top:8px"></div></div></div>
     <div class="section"><h2>メール本文から候補</h2><div class="card"><div class="muted">請求メールの本文を貼ると、金額と日付をざっくり拾う。</div><textarea id="mailText" style="width:100%;height:120px;margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:10px" placeholder="例：8月27日のお支払い金額は 113,948円です"></textarea><button class="btn full" style="margin-top:8px" onclick="parseMailText()">候補を作る</button></div></div>
   </section>
 
@@ -84,18 +84,79 @@ const yen = n => (Number.isFinite(n)? Math.round(n).toLocaleString('ja-JP')+'円
 const iso = d => d.toISOString().slice(0,10);
 const todayISO = () => iso(new Date());
 const DEFAULT = {
-  settings:{baseDate:'2026-07-24',baseBalance:197562,foodDaily:1000,utilities:20000,salary:260000,salaryDay:25,rent:69440,student:8118,paidy:3639,tempCharge:31500,tempStart:'2026-09',tempCount:6,renewalFee:69440,renewalDate:'2026-10-15',bonus:450000,bonusDate:'2026-12-25'},
-  oneOffs:[
-    {id:'income-jul',name:'明日の入金',date:'2026-07-25',amount:290000},
-    {id:'smbc-jul',name:'三井住友VISA 7月',date:'2026-07-27',amount:-208165},
-    {id:'amazon-jul',name:'Amazon 7月',date:'2026-07-27',amount:-37806},
-    {id:'paypay-jul',name:'PayPay 7月',date:'2026-07-27',amount:-70000},
-    {id:'smbc-aug',name:'三井住友VISA 8月',date:'2026-08-27',amount:-113948},
-    {id:'amazon-aug',name:'Amazon 8月（調整後）',date:'2026-08-27',amount:-60000},
-    {id:'paypay-aug',name:'PayPay 8月',date:'2026-08-27',amount:-22000}
-  ]
+  settings:{baseDate:todayISO(),baseBalance:0,foodDaily:1000,utilities:0,salary:0,salaryDay:25,rent:0,student:0,paidy:0,tempCharge:0,tempStart:'',tempCount:0,renewalFee:0,renewalDate:'',bonus:0,bonusDate:''},
+  oneOffs:[]
 };
 let state = load();
+// Optional one-time setup via URL hash. The hash is removed immediately after import,
+// and all values are then stored only in this browser's localStorage.
+(function importSetupFromHash(){
+  try {
+    if (!location.hash.startsWith('#setup=')) return;
+    const raw = decodeURIComponent(location.hash.slice(7));
+    const json = decodeURIComponent(escape(atob(raw.replace(/-/g,'+').replace(/_/g,'/'))));
+    const incoming = JSON.parse(json);
+    if (incoming && incoming.settings && Array.isArray(incoming.oneOffs)) {
+      state = incoming;
+      persist();
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  } catch (e) { console.warn('setup import failed', e); }
+})();
+
+// iPhone Shortcuts mail automation receiver.
+// Expected URL fragment: #mail=<percent-encoded mail body>
+// Fragments are not sent to GitHub Pages; parsing happens only in this browser.
+function normalizeJPText(t){
+  return String(t||'').replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/，/g,',').replace(/￥/g,'¥');
+}
+function classifyMail(t){
+  const x=t.toLowerCase();
+  if(/三井住友|vpass|smbc/.test(x)) return '三井住友カード';
+  if(/paypay/.test(x)) return 'PayPay';
+  if(/paidy|ペイディ/.test(x)) return 'Paidy';
+  if(/amazon/.test(x)) return 'Amazon';
+  if(/東京電力|tepco|電気/.test(x)) return '電気';
+  if(/ガス/.test(x)) return 'ガス';
+  if(/水道/.test(x)) return '水道';
+  return 'メール請求';
+}
+function findBillingAmount(t){
+  const x=normalizeJPText(t);
+  const priority=[
+    /(?:ご請求(?:金額|額)?|請求(?:金額|額)?|お支払い(?:金額|額)?|お支払(?:金額|額)?|支払(?:金額|額)?|ご利用(?:金額|額)?|合計)[^0-9¥]{0,40}¥?\s*([0-9][0-9,]*)\s*円?/i,
+    /¥\s*([0-9][0-9,]*)/,
+  ];
+  for(const re of priority){const m=x.match(re);if(m){const n=Number(m[1].replaceAll(',',''));if(Number.isFinite(n)&&n>0)return n}}
+  const nums=[...x.matchAll(/([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\s*円/g)].map(m=>Number(m[1].replaceAll(',',''))).filter(n=>Number.isFinite(n)&&n>=100);
+  return nums.length?Math.max(...nums):null;
+}
+function findBillingDate(t){
+  const x=normalizeJPText(t), now=new Date();
+  let m=x.match(/(?:お支払日|お支払い日|支払日|引落日|引き落とし日|振替日)[^0-9]{0,20}(?:(\d{4})[\/年.-])?\s*(\d{1,2})[\/月.-]\s*(\d{1,2})日?/i);
+  if(!m)m=x.match(/(?:(\d{4})年)?\s*(\d{1,2})月\s*(\d{1,2})日/);
+  if(!m)return todayISO();
+  let y=m[1]?Number(m[1]):now.getFullYear(), mo=Number(m[2]), d=Number(m[3]);
+  if(!m[1]){const candidate=new Date(y,mo-1,d,12); if(candidate<new Date(now.getFullYear(),now.getMonth()-3,1)) y+=1;}
+  return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function addAutoMail(text){
+  const t=normalizeJPText(text), amount=findBillingAmount(t); if(!amount)return {ok:false,reason:'金額を見つけられなかった'};
+  const item={id:'a'+Date.now(),name:classifyMail(t),date:findBillingDate(t),amount:-Math.abs(amount),auto:true};
+  const dup=state.oneOffs.some(x=>x.name===item.name&&x.date===item.date&&Number(x.amount)===item.amount);
+  if(!dup){state.oneOffs.push(item);persist();}
+  return {ok:true,item,duplicate:dup};
+}
+(function importMailFromHash(){
+  try{
+    if(!location.hash.startsWith('#mail='))return;
+    const body=decodeURIComponent(location.hash.slice(6));
+    const r=addAutoMail(body);
+    localStorage.setItem('mirai-zandaka-last-auto',JSON.stringify({...r,at:new Date().toISOString()}));
+    history.replaceState(null,'',location.pathname+location.search);
+  }catch(e){console.warn('mail automation import failed',e)}
+})();
+
 function load(){try{return JSON.parse(localStorage.getItem('mirai-zandaka-v1'))||structuredClone(DEFAULT)}catch(e){return structuredClone(DEFAULT)}}
 function persist(){localStorage.setItem('mirai-zandaka-v1',JSON.stringify(state))}
 function parseDate(s){let [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d,12)}
@@ -142,7 +203,9 @@ function render(){
   setVal('monthEnd',project(me)); setVal('oct1',project(oct1)); setVal('sixMonths',project(six)); document.getElementById('dailyBudget').textContent=yen(+s.foodDaily)+'/日';
   const tbody=document.getElementById('forecastBody');tbody.innerHTML='';
   for(let i=0;i<7;i++){const ms=new Date(base.getFullYear(),base.getMonth()+i,1,12), start=i===0?base:ms, end=endOfMonth(ms);const st=monthStats(start,end), bal=project(end);const tr=document.createElement('tr');tr.innerHTML=`<td>${ms.getFullYear()}/${String(ms.getMonth()+1).padStart(2,'0')}</td><td class="pos">+${yen(st.inc)}</td><td class="neg">-${yen(st.out)}</td><td class="${bal<0?'bad':''}">${yen(bal)}</td>`;tbody.appendChild(tr)}
-  renderPlans(); fillSettings(); persist();
+  renderPlans(); fillSettings();
+  const st=document.getElementById('autoImportStatus'); if(st){try{const r=JSON.parse(localStorage.getItem('mirai-zandaka-last-auto')||'null'); if(r&&r.at){st.textContent=r.ok?`最終自動取込: ${r.item.name} ${r.item.date} ${yen(Math.abs(r.item.amount))}${r.duplicate?'（重複なので追加なし）':''}`:`最終自動取込: ${r.reason||'失敗'}`}}catch(e){}}
+  persist();
 }
 function setVal(id,n){const el=document.getElementById(id);el.textContent=yen(n);el.className='n '+(n<0?'bad':n>0?'good':'')}
 function renderPlans(){
